@@ -15,20 +15,28 @@
  */
 package org.snomed.otf.owltoolkit.taxonomy;
 
-import com.google.common.collect.Sets;
-import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
-import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+import static java.lang.Long.parseLong;
+
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Collectors;
+
 import org.semanticweb.owlapi.model.OWLAxiom;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.snomed.otf.owltoolkit.constants.Concepts;
+import org.snomed.otf.owltoolkit.domain.DatatypeProperty;
 import org.snomed.otf.owltoolkit.domain.Relationship;
 
-import java.util.*;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.stream.Collectors;
+import com.google.common.collect.Sets;
 
-import static java.lang.Long.parseLong;
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 
 public class SnomedTaxonomy {
 
@@ -38,10 +46,14 @@ public class SnomedTaxonomy {
 	private Set<Long> fullyDefinedConceptIds = new LongOpenHashSet();
 	private Map<Long, Relationship> statedRelationshipsById = new HashMap<>();
 	private Map<Long, Relationship> inferredRelationshipsById = new HashMap<>();
+    private Map<String, DatatypeProperty> statedDatatypesById = new HashMap<>();
+    private Map<String, DatatypeProperty> inferredDatatypesById = new HashMap<>();
 	private Map<String, OWLAxiom> axiomsById = new HashMap<>();
 	private Map<Long, Set<Relationship>> conceptStatedRelationshipMap = new Long2ObjectOpenHashMap<>();
 	private Map<Long, Set<Relationship>> conceptInferredRelationshipMap = new Long2ObjectOpenHashMap<>();
-	private Map<Long, Set<Relationship>> conceptInactiveInferredRelationshipMap = new Long2ObjectOpenHashMap<>();
+    private Map<Long, Set<DatatypeProperty>> conceptStatedDatatypeMap = new Long2ObjectOpenHashMap<>();
+    private Map<Long, Set<DatatypeProperty>> conceptInferredDatatypeMap = new Long2ObjectOpenHashMap<>();
+    private Map<Long, Set<Relationship>> conceptInactiveInferredRelationshipMap = new Long2ObjectOpenHashMap<>();
 	private Map<Long, Set<OWLAxiom>> conceptAxiomMap = new Long2ObjectOpenHashMap<>();
 	private Map<Long, Set<Long>> statedSubTypesMap = new Long2ObjectOpenHashMap<>();
 	private Map<Long, Set<Long>> ungroupedRolesByContentType = new HashMap<>();
@@ -74,6 +86,10 @@ public class SnomedTaxonomy {
 		return conceptInferredRelationshipMap.getOrDefault(conceptId, Collections.emptySet());
 	}
 
+    public Collection<DatatypeProperty> getStatedDatatypes(Long conceptId) {
+        return conceptStatedDatatypeMap.getOrDefault(conceptId, Collections.emptySet());
+    }
+
 	public Set<Relationship> getInactiveInferredRelationships(Long conceptId) {
 		return conceptInactiveInferredRelationshipMap.getOrDefault(conceptId, Collections.emptySet());
 	}
@@ -101,6 +117,27 @@ public class SnomedTaxonomy {
 			}
 		}
 	}
+
+    public void addOrModifyDatatypeProperty(boolean stated, long conceptId, DatatypeProperty property) {
+	        // Have we seen this relationship before ie we need to modify it?
+        DatatypeProperty existingProperty = stated ? statedDatatypesById.get(property.getUuid())
+	                : inferredDatatypesById.get(property.getUuid());
+
+        if (existingProperty != null) {
+	            // Only effectiveTime and groupId are mutable
+            existingProperty.setEffectiveTime(property.getEffectiveTime());
+            existingProperty.setGroup(property.getGroup());
+	        } else {
+	            // add relationship
+	            if (stated) {
+	                conceptStatedDatatypeMap.computeIfAbsent(conceptId, k -> new HashSet<>()).add(property);
+                statedDatatypesById.put(property.getUuid(), property);
+	            } else {
+	                conceptInferredDatatypeMap.computeIfAbsent(conceptId, k -> new HashSet<>()).add(property);
+                inferredDatatypesById.put(property.getUuid(), property);
+	            }
+	        }
+	    }
 
 	public void addInactiveInferredRelationship(long conceptId, Relationship relationship) {
 		conceptInactiveInferredRelationshipMap.computeIfAbsent(conceptId, k -> new HashSet<>()).add(relationship);

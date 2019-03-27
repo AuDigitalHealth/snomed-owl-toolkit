@@ -15,26 +15,56 @@
  */
 package org.snomed.otf.owltoolkit.ontology;
 
-import com.google.common.base.Strings;
-import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+import static java.lang.Long.parseLong;
+
+import java.io.OutputStream;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
+
 import org.semanticweb.owlapi.apibinding.OWLManager;
 import org.semanticweb.owlapi.formats.FunctionalSyntaxDocumentFormat;
-import org.semanticweb.owlapi.model.*;
+import org.semanticweb.owlapi.model.AxiomType;
+import org.semanticweb.owlapi.model.IRI;
+import org.semanticweb.owlapi.model.OWLAxiom;
+import org.semanticweb.owlapi.model.OWLClass;
+import org.semanticweb.owlapi.model.OWLClassAxiom;
+import org.semanticweb.owlapi.model.OWLClassExpression;
+import org.semanticweb.owlapi.model.OWLDataFactory;
+import org.semanticweb.owlapi.model.OWLDataHasValue;
+import org.semanticweb.owlapi.model.OWLDataProperty;
+import org.semanticweb.owlapi.model.OWLObjectProperty;
+import org.semanticweb.owlapi.model.OWLObjectPropertyExpression;
+import org.semanticweb.owlapi.model.OWLObjectSomeValuesFrom;
+import org.semanticweb.owlapi.model.OWLOntology;
+import org.semanticweb.owlapi.model.OWLOntologyCreationException;
+import org.semanticweb.owlapi.model.OWLOntologyID;
+import org.semanticweb.owlapi.model.OWLOntologyManager;
+import org.semanticweb.owlapi.model.OWLOntologyStorageException;
+import org.semanticweb.owlapi.model.OWLSubPropertyChainOfAxiom;
+import org.semanticweb.owlapi.model.OWLTransitiveObjectPropertyAxiom;
 import org.semanticweb.owlapi.util.DefaultPrefixManager;
+import org.semanticweb.owlapi.vocab.OWL2Datatype;
 import org.snomed.otf.owltoolkit.constants.Concepts;
 import org.snomed.otf.owltoolkit.domain.AxiomRepresentation;
+import org.snomed.otf.owltoolkit.domain.DatatypeProperty;
 import org.snomed.otf.owltoolkit.domain.Relationship;
 import org.snomed.otf.owltoolkit.ontology.render.SnomedFunctionalSyntaxDocumentFormat;
 import org.snomed.otf.owltoolkit.ontology.render.SnomedFunctionalSyntaxStorerFactory;
 import org.snomed.otf.owltoolkit.ontology.render.SnomedPrefixManager;
 import org.snomed.otf.owltoolkit.service.ReasonerServiceRuntimeException;
 import org.snomed.otf.owltoolkit.taxonomy.SnomedTaxonomy;
+
+import com.google.common.base.Strings;
+
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import uk.ac.manchester.cs.owl.owlapi.OWLDataFactoryImpl;
-
-import java.io.OutputStream;
-import java.util.*;
-
-import static java.lang.Long.parseLong;
 
 @SuppressWarnings("Guava")
 public class OntologyService {
@@ -140,16 +170,22 @@ public class OntologyService {
 			// Convert any stated relationships to axioms
 			boolean primitive = snomedTaxonomy.isPrimitive(conceptId);
 			Collection<Relationship> statedRelationships = snomedTaxonomy.getStatedRelationships(conceptId);
+            Collection<DatatypeProperty> statedDatatypes = snomedTaxonomy.getStatedDatatypes(conceptId);
 
-			if (!statedRelationships.isEmpty() && !attributeIds.contains(conceptId)) {
+            if ((!statedRelationships.isEmpty() || !statedDatatypes.isEmpty()) && !attributeIds.contains(conceptId)) {
 				AxiomRepresentation representation = new AxiomRepresentation();
 				representation.setPrimitive(primitive);
 				representation.setLeftHandSideNamedConcept(conceptId);
-				Map<Integer, List<Relationship>> relationshipMap = new HashMap<>();
+                Map<Integer, List<Relationship>> relationshipMap = new HashMap<>();
+                Map<Integer, List<DatatypeProperty>> datatypeMap = new HashMap<>();
 				for (Relationship statedRelationship : statedRelationships) {
 					relationshipMap.computeIfAbsent(statedRelationship.getGroup(), g -> new ArrayList<>()).add(statedRelationship);
 				}
-				representation.setRightHandSideRelationships(relationshipMap);
+                for (DatatypeProperty statedDatatype : statedDatatypes) {
+                    datatypeMap.computeIfAbsent(statedDatatype.getGroup(), g -> new ArrayList<>()).add(statedDatatype);
+                }
+                representation.setRightHandSideRelationships(relationshipMap);
+                representation.setRightHandSideDatatypes(datatypeMap);
 				OWLClassAxiom conceptAxiom = createOwlClassAxiom(representation);
 				axiomsMap.computeIfAbsent(conceptId, (id) -> new HashSet<>())
 						.add(conceptAxiom);
@@ -182,10 +218,12 @@ public class OntologyService {
 
 	public OWLClassAxiom createOwlClassAxiom(AxiomRepresentation axiomRepresentation) {
 		// Left side is usually a single named concept
-		OWLClassExpression leftSide = createOwlClassExpression(axiomRepresentation.getLeftHandSideNamedConcept(), axiomRepresentation.getLeftHandSideRelationships());
+        OWLClassExpression leftSide = createOwlClassExpression(axiomRepresentation.getLeftHandSideNamedConcept(),
+            axiomRepresentation.getLeftHandSideRelationships(), axiomRepresentation.getLeftHandSideDatatypes());
 
 		// Right side is usually an expression created from a set of stated relationships
-		OWLClassExpression rightSide = createOwlClassExpression(axiomRepresentation.getRightHandSideNamedConcept(), axiomRepresentation.getRightHandSideRelationships());
+        OWLClassExpression rightSide = createOwlClassExpression(axiomRepresentation.getRightHandSideNamedConcept(),
+            axiomRepresentation.getRightHandSideRelationships(), axiomRepresentation.getRightHandSideDatatypes());
 
 		if (axiomRepresentation.isPrimitive()) {
 			return factory.getOWLSubClassOfAxiom(leftSide, rightSide);
@@ -194,7 +232,8 @@ public class OntologyService {
 		}
 	}
 
-	private OWLClassExpression createOwlClassExpression(Long namedConcept, Map<Integer, List<Relationship>> relationships) {
+    private OWLClassExpression createOwlClassExpression(Long namedConcept, Map<Integer, List<Relationship>> relationships,
+            Map<Integer, List<DatatypeProperty>> datatypes) {
 		if (namedConcept != null) {
 			return getOwlClass(namedConcept);
 		}
@@ -224,6 +263,28 @@ public class OntologyService {
 				}
 			}
 		}
+
+        for (List<DatatypeProperty> datatypeList : datatypes.values()) {
+            for (DatatypeProperty datatype : datatypeList) {
+                int group = datatype.getGroup();
+                long typeId = datatype.getTypeId();
+                String value = datatype.getValue();
+                OWL2Datatype owlDatatype = datatype.getDatatype();
+                if (group == 0) {
+                    if (ungroupedAttributes.contains(typeId)) {
+                        // Special cases
+                        terms.add(getOwlDataHasValue(typeId, value, owlDatatype));
+                    } else {
+                        // Self grouped relationships in group 0
+                        terms.add(getOwlObjectSomeValuesFromGroup(getOwlDataHasValue(typeId, value, owlDatatype)));
+                    }
+                } else {
+                    // Collect statements in the same role group into sets
+                    nonZeroRoleGroups.computeIfAbsent(group, g -> new HashSet<>())
+                        .add(getOwlDataHasValue(typeId, value, owlDatatype));
+                }
+            }
+        }
 
 		// For each role group if there is more than one statement in the group we wrap them in an ObjectIntersectionOf statement
 		for (Integer group : nonZeroRoleGroups.keySet()) {
@@ -283,6 +344,10 @@ public class OntologyService {
 	private OWLObjectSomeValuesFrom getOwlObjectSomeValuesFrom(long typeId, long destinationId) {
 		return factory.getOWLObjectSomeValuesFrom(getOwlObjectProperty(typeId), getOwlClass(destinationId));
 	}
+
+    private OWLDataHasValue getOwlDataHasValue(long typeId, String value, OWL2Datatype datatype) {
+        return factory.getOWLDataHasValue(getOwlDataProperty(typeId), factory.getOWLLiteral(value, datatype));
+    }
 
 	private OWLObjectProperty getOwlObjectProperty(long typeId) {
 		return factory.getOWLObjectProperty(COLON + typeId, prefixManager);

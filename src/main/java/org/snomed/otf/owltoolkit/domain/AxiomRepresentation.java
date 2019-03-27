@@ -2,15 +2,16 @@ package org.snomed.otf.owltoolkit.domain;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 public class AxiomRepresentation {
 
 	private boolean primitive;
 	private Long leftHandSideNamedConcept;
-	private Map<Integer, List<Relationship>> leftHandSideRelationships;
+    private Map<Integer, List<Relationship>> leftHandSideRelationships;
+    private Map<Integer, List<DatatypeProperty>> leftHandSideDatatypes;
 	private Long rightHandSideNamedConcept;
 	private Map<Integer, List<Relationship>> rightHandSideRelationships;
+    private Map<Integer, List<DatatypeProperty>> rightHandSideDatatypes;
 
 	public AxiomRepresentation() {
 	}
@@ -54,5 +55,21 @@ public class AxiomRepresentation {
 	public void setRightHandSideRelationships(Map<Integer, List<Relationship>> rightHandSideRelationships) {
 		this.rightHandSideRelationships = rightHandSideRelationships;
 	}
+
+    public Map<Integer, List<DatatypeProperty>> getRightHandSideDatatypes() {
+        return rightHandSideDatatypes;
+    }
+
+    public void setRightHandSideDatatypes(Map<Integer, List<DatatypeProperty>> datatypeMap) {
+        this.rightHandSideDatatypes = datatypeMap;
+    }
+
+    public Map<Integer, List<DatatypeProperty>> getLeftHandSideDatatypes() {
+        return leftHandSideDatatypes;
+    }
+
+    public void setLeftHandSideDatatypes(Map<Integer, List<DatatypeProperty>> leftHandSideDatatypes) {
+        this.leftHandSideDatatypes = leftHandSideDatatypes;
+    }
 
 }
