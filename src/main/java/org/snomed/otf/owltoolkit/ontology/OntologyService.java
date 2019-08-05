@@ -30,25 +30,7 @@ import java.util.TreeMap;
 
 import org.semanticweb.owlapi.apibinding.OWLManager;
 import org.semanticweb.owlapi.formats.FunctionalSyntaxDocumentFormat;
-import org.semanticweb.owlapi.model.AxiomType;
-import org.semanticweb.owlapi.model.IRI;
-import org.semanticweb.owlapi.model.OWLAxiom;
-import org.semanticweb.owlapi.model.OWLClass;
-import org.semanticweb.owlapi.model.OWLClassAxiom;
-import org.semanticweb.owlapi.model.OWLClassExpression;
-import org.semanticweb.owlapi.model.OWLDataFactory;
-import org.semanticweb.owlapi.model.OWLDataHasValue;
-import org.semanticweb.owlapi.model.OWLDataProperty;
-import org.semanticweb.owlapi.model.OWLObjectProperty;
-import org.semanticweb.owlapi.model.OWLObjectPropertyExpression;
-import org.semanticweb.owlapi.model.OWLObjectSomeValuesFrom;
-import org.semanticweb.owlapi.model.OWLOntology;
-import org.semanticweb.owlapi.model.OWLOntologyCreationException;
-import org.semanticweb.owlapi.model.OWLOntologyID;
-import org.semanticweb.owlapi.model.OWLOntologyManager;
-import org.semanticweb.owlapi.model.OWLOntologyStorageException;
-import org.semanticweb.owlapi.model.OWLSubPropertyChainOfAxiom;
-import org.semanticweb.owlapi.model.OWLTransitiveObjectPropertyAxiom;
+import org.semanticweb.owlapi.model.*;
 import org.semanticweb.owlapi.util.DefaultPrefixManager;
 import org.semanticweb.owlapi.vocab.OWL2Datatype;
 import org.snomed.otf.owltoolkit.constants.Concepts;
@@ -142,22 +124,20 @@ public class OntologyService {
 
 		Set<Long> descendants = snomedTaxonomy.getDescendants(conceptModelObjectAttribute);
 		for (Long objectAttributeId : descendants) {
-			OWLObjectProperty owlObjectProperty = getOwlObjectProperty(objectAttributeId);
 			for (Relationship relationship : snomedTaxonomy.getStatedRelationships(objectAttributeId)) {
 				if (relationship.getTypeId() == Concepts.IS_A_LONG && (relationship.getDestinationId() != Concepts.CONCEPT_MODEL_ATTRIBUTE_LONG) || !conceptModelObjectAttributePresent) {
 					axiomsMap.computeIfAbsent(objectAttributeId, (id) -> new HashSet<>())
-							.add(factory.getOWLSubObjectPropertyOfAxiom(owlObjectProperty, getOwlObjectProperty(relationship.getDestinationId())));
+							.add(createOwlSubObjectPropertyOfAxiom(objectAttributeId, relationship.getDestinationId()));
 				}
 			}
 		}
 
 		if (snomedTaxonomy.getAllConceptIds().contains(Concepts.CONCEPT_MODEL_DATA_ATTRIBUTE_LONG)) {
 			for (Long dataAttributeId : snomedTaxonomy.getDescendants(Concepts.CONCEPT_MODEL_DATA_ATTRIBUTE_LONG)) {
-				OWLDataProperty owlDataProperty = getOwlDataProperty(dataAttributeId);
 				for (Relationship relationship : snomedTaxonomy.getStatedRelationships(dataAttributeId)) {
 					if (relationship.getTypeId() == Concepts.IS_A_LONG) {
 						axiomsMap.computeIfAbsent(dataAttributeId, (id) -> new HashSet<>())
-								.add(factory.getOWLSubDataPropertyOfAxiom(owlDataProperty, getOwlDataProperty(relationship.getDestinationId())));
+								.add(createOwlSubDataPropertyOfAxiom(dataAttributeId, relationship.getDestinationId()));
 					}
 				}
 			}
@@ -232,8 +212,16 @@ public class OntologyService {
 		}
 	}
 
+	public OWLSubObjectPropertyOfAxiom createOwlSubObjectPropertyOfAxiom(Long objectAttributeId, long destinationId) {
+		return factory.getOWLSubObjectPropertyOfAxiom(getOwlObjectProperty(objectAttributeId), getOwlObjectProperty(destinationId));
+	}
+
+	public OWLSubDataPropertyOfAxiom createOwlSubDataPropertyOfAxiom(Long dataAttributeId, long destinationId) {
+		return factory.getOWLSubDataPropertyOfAxiom(getOwlDataProperty(dataAttributeId), getOwlDataProperty(destinationId));
+	}
+
     private OWLClassExpression createOwlClassExpression(Long namedConcept, Map<Integer, List<Relationship>> relationships,
-            Map<Integer, List<DatatypeProperty>> datatypes) {
+                                                        Map<Integer, List<DatatypeProperty>> datatypes) {
 		if (namedConcept != null) {
 			return getOwlClass(namedConcept);
 		}
