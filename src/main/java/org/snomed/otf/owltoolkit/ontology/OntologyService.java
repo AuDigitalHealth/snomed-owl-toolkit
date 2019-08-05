@@ -252,27 +252,29 @@ public class OntologyService {
 			}
 		}
 
-        for (List<DatatypeProperty> datatypeList : datatypes.values()) {
-            for (DatatypeProperty datatype : datatypeList) {
-                int group = datatype.getGroup();
-                long typeId = datatype.getTypeId();
-                String value = datatype.getValue();
-                OWL2Datatype owlDatatype = datatype.getDatatype();
-                if (group == 0) {
-                    if (ungroupedAttributes.contains(typeId)) {
-                        // Special cases
-                        terms.add(getOwlDataHasValue(typeId, value, owlDatatype));
-                    } else {
-                        // Self grouped relationships in group 0
-                        terms.add(getOwlObjectSomeValuesFromGroup(getOwlDataHasValue(typeId, value, owlDatatype)));
-                    }
-                } else {
-                    // Collect statements in the same role group into sets
-                    nonZeroRoleGroups.computeIfAbsent(group, g -> new HashSet<>())
-                        .add(getOwlDataHasValue(typeId, value, owlDatatype));
-                }
-            }
-        }
+		if (datatypes != null) {
+			for (List<DatatypeProperty> datatypeList : datatypes.values()) {
+				for (DatatypeProperty datatype : datatypeList) {
+					int group = datatype.getGroup();
+					long typeId = datatype.getTypeId();
+					String value = datatype.getValue();
+					OWL2Datatype owlDatatype = datatype.getDatatype();
+					if (group == 0) {
+						if (ungroupedAttributes.contains(typeId)) {
+							// Special cases
+							terms.add(getOwlDataHasValue(typeId, value, owlDatatype));
+						} else {
+							// Self grouped relationships in group 0
+							terms.add(getOwlObjectSomeValuesFromGroup(getOwlDataHasValue(typeId, value, owlDatatype)));
+						}
+					} else {
+						// Collect statements in the same role group into sets
+						nonZeroRoleGroups.computeIfAbsent(group, g -> new HashSet<>())
+								.add(getOwlDataHasValue(typeId, value, owlDatatype));
+					}
+				}
+			}
+		}
 
 		// For each role group if there is more than one statement in the group we wrap them in an ObjectIntersectionOf statement
 		for (Integer group : nonZeroRoleGroups.keySet()) {
